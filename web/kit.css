@@ -1,0 +1,1652 @@
+/* KitStation — "Synth Luxury" style
+   Access Virus TI brushed-silver chassis + Roland Aira green LCD + TR-8S
+   illuminated coloured squares. See docs/styles.html for the design pitch. */
+
+/* Google Fonts pulled in HTML head. Faces used here:
+   - Rajdhani            : chrome legends, buttons (uppercase, tracked)
+   - Share Tech Mono     : LCD text (green phosphor)
+   - Barlow Condensed    : pad labels, small captions
+   - JetBrains Mono      : numeric readouts */
+
+/* ── Tokens ───────────────────────────────────────────────────────────────── */
+:root {
+  /* Panel — brushed silver-grey gradient (Access Virus) */
+  --panel-top:    #d4d8de;
+  --panel-mid:    #b8bdc5;
+  --panel-bot:    #8b909a;
+  --panel-inset:  #4a4f58;      /* darker recessed areas */
+  --panel-hi:     rgba(255,255,255,0.55);
+  --panel-shadow: rgba(0,0,0,0.35);
+
+  --engraved:     #12141a;       /* dark text on silver */
+  --engraved-dim: #4a4f58;
+  --silver-text:  #d5d8de;       /* light text on dark insets */
+  --silver-dim:   #7a8290;
+
+  /* LCD — Roland green phosphor */
+  --lcd-bg:       #0a1108;
+  --lcd-frame:    #05100a;
+  --lcd:          #6bff9a;
+  --lcd-dim:      #2f8a48;
+  --lcd-glow:     rgba(90,255,140,0.55);
+
+  /* LEDs */
+  --led-red:      #ff2a1c;
+  --led-red-dim:  #6a2018;
+  --led-green:    #21b45c;
+  --led-green-dim:#0f5028;
+  --led-amber:    #ff9938;
+  --led-amber-dim:#7a4a12;
+  --led-cyan:     #22d3ee;
+  --led-cyan-dim: #0e6a7c;
+
+  /* Pad colours — Roland TR-8S factory palette per slot */
+  --pad-bd: #e04848;
+  --pad-sd: #ff8c3a;
+  --pad-lt: #b06cf7;
+  --pad-mt: #d152e6;
+  --pad-ht: #ff8c3a;
+  --pad-rs: #ff5a5a;
+  --pad-hc: #22c55e;
+  --pad-ch: #2ecad0;
+  --pad-oh: #7bd0e0;
+  --pad-cc: #3b82f6;
+  --pad-rc: #7c6cf0;
+
+  /* Fixed column widths — layout is unchanged from the previous pass */
+  --w-kits:     220px;
+  --w-detail:   320px;    /* right sub-column of center: PAD 1 + SAMPLE */
+  --w-right:    300px;    /* MASTER FX + VU + plugins */
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+
+body {
+  background:
+    /* subtle vertical brushed-metal streak */
+    repeating-linear-gradient(90deg,
+      rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px,
+      rgba(0,0,0,0.02) 1px,      rgba(0,0,0,0.02) 2px),
+    /* faint radial highlight top-centre so the panel reads lit */
+    radial-gradient(120% 60% at 50% -20%, rgba(255,255,255,0.25), transparent 60%),
+    linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+  background-attachment: fixed;
+  color: var(--engraved);
+  font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+
+/* Hidden attribute must beat any `display: grid/flex` set explicitly. */
+[hidden] { display: none !important; }
+
+/* ── Typographic helpers ──────────────────────────────────────────────────── */
+.section-label, .col-label, .lbl {
+  color: var(--engraved-dim);
+  font-family: "Rajdhani", sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+}
+.section-label-spaced { margin-left: 14px; }
+.muted    { color: var(--engraved-dim); font-style: normal; font-size: 11px; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+.muted-sm { color: var(--engraved-dim); font-size: 10px; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+.hint     { color: var(--engraved-dim); font-size: 10.5px; display: block; margin: 4px 0; font-style: italic; }
+.linklike {
+  background: none; border: 0; padding: 0; color: var(--engraved);
+  cursor: pointer; font-size: 11px; font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+.linklike.accent { color: var(--led-red); text-shadow: 0 0 4px rgba(255,42,28,0.4); }
+.accent { color: var(--led-red); }
+
+/* ── Chrome pill button (Virus tabs / general buttons) ───────────────────── */
+.pill {
+  background: linear-gradient(180deg, #dde1e6 0%, #b0b5be 100%);
+  border: 1px solid #6b7079;
+  color: var(--engraved);
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.6),
+    inset 0 -1px 0 rgba(0,0,0,0.15),
+    0 1px 0 rgba(255,255,255,0.4);
+  transition: filter .1s, transform .05s, box-shadow .1s;
+  white-space: nowrap;
+}
+.pill:hover  { filter: brightness(1.05); }
+.pill:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); }
+.pill.pill-sm     { padding: 3px 8px;  font-size: 10px; }
+.pill.pill-lg     { padding: 6px 14px; font-size: 12px; }
+
+/* Illuminated state — button glows in an LED colour when armed/selected. */
+.pill.pill-active {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-red);
+  text-shadow: 0 0 6px rgba(255,42,28,0.7);
+  border-color: #1a1d24;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5), 0 0 6px rgba(255,42,28,0.35);
+}
+.pill.pill-blue {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-cyan);
+  text-shadow: 0 0 6px rgba(34,211,238,0.7);
+  border-color: #1a1d24;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+.pill.pill-on {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-amber);
+  text-shadow: 0 0 6px rgba(255,153,56,0.7);
+  border-color: #1a1d24;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5), 0 0 6px rgba(255,153,56,0.35);
+}
+.pill.pill-ok {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-green);
+  text-shadow: 0 0 6px rgba(33,180,92,0.7);
+  border-color: #1a1d24;
+}
+.pill.pill-danger { color: var(--led-red); }
+
+/* ── Pioneer-style illuminated transport (PLAY / REC) ─────────────────────── */
+/* Rest: dark recessed switch. Armed: LED glow in colour. */
+.pill-led {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--silver-text);
+  border: 1px solid #1a1d24;
+  padding: 5px 16px;
+  border-radius: 3px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  transition: color .1s, box-shadow .1s;
+}
+.pill-led:hover { filter: brightness(1.08); }
+.pill-led.on {
+  color: var(--led-on, var(--led-red));
+  text-shadow: 0 0 8px color-mix(in oklab, var(--led-on, var(--led-red)) 80%, transparent);
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.5),
+    0 0 12px color-mix(in oklab, var(--led-on, var(--led-red)) 45%, transparent);
+}
+.pill-led.play { --led-on: var(--led-green); }
+.pill-led.rec  { --led-on: var(--led-red); }
+
+/* ── Recessed dark input (Virus displays / value fields) ─────────────────── */
+.dropdown, .kit-name, .pad-name, .filter-input, input[type="number"] {
+  background: linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  background-color: #10131a;            /* fallback if OS overrides gradients */
+  border: 1px solid #05070c;
+  color: var(--lcd);                    /* green-on-black — the LCD treatment */
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-family: "Share Tech Mono", monospace;
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  outline: none;
+  text-shadow: 0 0 3px var(--lcd-glow);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.4);
+  color-scheme: dark;                   /* keep dropdown popup dark, not OS-light */
+}
+/* Option list (opens as a native menu) — force dark bg + green text */
+.dropdown option, .dropdown-sm option {
+  background: #10131a;
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+}
+.kit-name  { width: 200px; }
+.pad-name  { width: 100%; }
+.filter-input { width: 100%; }
+.dropdown { width: 100%; appearance: none;
+  /* Custom chevron because appearance:none removes the OS one */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--lcd-dim) 50%),
+    linear-gradient(-45deg, transparent 50%, var(--lcd-dim) 50%),
+    linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  background-position:
+    calc(100% - 14px) 50%, calc(100% - 9px) 50%, 0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 24px;
+}
+input[type="number"] {
+  font-weight: 700; font-size: 14px; width: 66px;
+  font-family: "Share Tech Mono", monospace;
+  color: var(--lcd); text-shadow: 0 0 4px var(--lcd-glow);
+}
+
+input[type="range"] {
+  appearance: none; -webkit-appearance: none;
+  background: transparent; height: 8px; width: 140px;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  border: 1px solid #05070c;
+  border-radius: 3px;
+  height: 6px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none;
+  width: 14px; height: 18px;
+  background: linear-gradient(180deg, #eaeef4 0%, #6c727d 100%);
+  border: 1px solid #4a4f58;
+  border-radius: 2px;
+  margin-top: -7px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+/* ── Top bar (chrome nameplate) ──────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, #dde1e6 0%, #b8bdc5 100%);
+  border-bottom: 1px solid #6b7079;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.6);
+  flex-shrink: 0;
+}
+.brand {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--engraved);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+.brand-mark { color: var(--led-red); font-style: normal; text-shadow: 0 0 4px rgba(255,42,28,0.4); }
+.kit-name-wrap { display: flex; align-items: center; }
+.toolbar { display: flex; gap: 4px; flex-wrap: wrap; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.filled {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  color: var(--lcd);
+  text-shadow: 0 0 4px var(--lcd-glow);
+  background: var(--lcd-bg);
+  padding: 3px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--lcd-frame);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+.filled strong { color: var(--lcd); font-weight: 400; }
+
+/* ── Workspace ────────────────────────────────────────────────────────────── */
+.workspace {
+  display: flex; flex-direction: row;
+  flex: 1; min-height: 0; width: 100%;
+  overflow: hidden;
+}
+.col-kits {
+  width: var(--w-kits); flex: 0 0 var(--w-kits);
+  background: linear-gradient(180deg, #c4c9d0 0%, #a8adb6 100%);
+  border-right: 1px solid #6b7079;
+  box-shadow: inset -2px 0 4px rgba(0,0,0,0.1);
+  padding: 10px 10px 14px;
+  overflow-y: auto;
+}
+.col-center {
+  /* Take whatever space is left between kits (left) and right column. Was
+     previously pinned to a fixed 1100+ px width, which chopped off content
+     on narrower windows. */
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12px 14px;
+  overflow-y: auto;
+  /* Two sub-columns: sequencer grows, pad-detail is fixed 340. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--w-detail);
+  grid-template-rows: min-content;
+  gap: 10px;
+  align-content: start;
+}
+.seq-col    { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.detail-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail-col .pad-card, .detail-col .sample-card { margin-bottom: 0; }
+/* Waveform canvas is fluid — was 640 fixed which forced horizontal scroll
+   inside the sample card when detail-col is only 340 wide. */
+.detail-col .wave { width: 100%; height: auto; max-width: 100%; display: block; }
+.col-right {
+  width: var(--w-right); flex: 0 0 var(--w-right);
+  margin-left: auto;
+  background: linear-gradient(180deg, #c4c9d0 0%, #a8adb6 100%);
+  border-left: 1px solid #6b7079;
+  box-shadow: inset 2px 0 4px rgba(0,0,0,0.1);
+  padding: 10px;
+  overflow-y: auto;
+}
+
+/* ── Kit list (recessed dark strip with LCD-green rows) ──────────────────── */
+.col-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 4px 2px 6px;
+}
+.kit-list {
+  list-style: none; margin: 0 0 10px 0; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  border: 1px solid #05070c;
+  border-radius: 3px;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.5);
+}
+.kit-list li {
+  padding: 5px 8px;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--silver-dim);
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+}
+.kit-list li:hover { background: rgba(255,255,255,0.05); color: var(--silver-text); }
+.kit-list li.selected {
+  background: rgba(107,255,154,0.08);
+  color: var(--lcd);
+  text-shadow: 0 0 4px var(--lcd-glow);
+  border-left-color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+}
+.preset-list li { padding: 3px 8px; font-size: 11px; }
+
+/* ── Center: tab strip ───────────────────────────────────────────────────── */
+.tab-strip { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+
+/* ── Top strip — one tight row above the pads carrying PADS toggle,
+      transport buttons, and BPM/SWING/VEL. Was previously three rows. */
+.top-strip {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 2px 4px;
+  background: linear-gradient(180deg, #2c313a 0%, #1a1d24 100%);
+  border: 1px solid #05070c;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.top-strip .knob-inline { margin-right: 8px; }
+.top-strip .knob-inline input[type="range"] { width: 100px; }
+
+/* Compact PATTERN row below the pads. */
+.pattern-strip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 0;
+}
+
+/* PADS toggle + pad row grouped as a single visual unit. */
+.pad-group {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 4px;
+  background: linear-gradient(180deg, #1c1f28 0%, #0c0f16 100%);
+  border: 1px solid #05070c;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.pad-group .tab-strip { padding: 0 2px; }
+.pad-group .pad-row {
+  background: transparent;    /* the group already provides the inset frame */
+  border: 0;
+  box-shadow: none;
+  padding: 4px 0 0;
+}
+
+/* Old horizontal pad-detail-row is retired — now stacked in .detail-col
+   (the right sub-column of the centre workspace). */
+
+/* ── Pad row — Roland-style illuminated coloured squares ─────────────────── */
+/* Mounted on a dark inset "circuit board" strip that spans the row. */
+.pad-row {
+  display: grid;
+  grid-template-columns: repeat(11, 70px);
+  gap: 4px;
+  padding: 10px 8px;
+  justify-content: start;
+  background: linear-gradient(180deg, #2c313a 0%, #1a1d24 100%);
+  border: 1px solid #05070c;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.35);
+}
+.pad-row.mode-grid {
+  grid-template-columns: repeat(4, 88px);
+  gap: 8px;
+}
+.pad-row.mode-grid .pad { width: 88px; }
+.pad-row.mode-grid .pad .meters { display: none; }
+.pad-row.mode-grid .pad .vu-num { display: none; }
+.pad-row.mode-grid .pad .body { height: 60px; }
+
+.pad {
+  display: flex; flex-direction: column; align-items: center;
+  cursor: pointer; width: 70px; gap: 3px;
+}
+.pad .meters {
+  display: flex; gap: 3px; align-items: stretch;
+  height: 44px;
+}
+.pad .pad-vol {
+  width: 12px; height: 100%;
+  background: #050810;
+  border: 1px solid #000;
+  border-radius: 1px;
+  display: flex; flex-direction: column-reverse;
+  overflow: hidden;
+  cursor: ns-resize;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.7);
+  position: relative;
+}
+.pad .pad-vol > i {
+  display: block; width: 100%;
+  background: linear-gradient(180deg, var(--pad, #7bd0e0) 0%, color-mix(in oklab, var(--pad, #7bd0e0) 55%, black) 100%);
+  transition: height .05s linear;
+  pointer-events: none;              /* clicks pass through to .pad-vol */
+}
+/* Fader cap — a small silver tick showing the handle sits AT the top of fill */
+.pad .pad-vol::after {
+  content: '';
+  position: absolute;
+  left: -2px; right: -2px;
+  bottom: calc(var(--vol-pct, 78%) - 1px);
+  height: 2px;
+  background: #eaeef4;
+  box-shadow: 0 0 3px rgba(255,255,255,0.4);
+  pointer-events: none;
+}
+.pad .vu {
+  width: 10px; height: 100%;
+  background: #050810;
+  border: 1px solid #000;
+  border-radius: 1px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  overflow: hidden;
+  padding: 1px; gap: 1px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.7);
+}
+.pad .vu .r { background: var(--led-red);   height: 18%; opacity: .3; }
+.pad .vu .y { background: var(--led-amber); height: 27%; opacity: .5; }
+.pad .vu .g { background: var(--led-green); height: 55%; opacity: .8; }
+.pad .vu-num {
+  color: var(--silver-dim); font-size: 9px;
+  font-family: "Share Tech Mono", monospace;
+}
+/* THE PAD — small illuminated coloured square, Roland-style */
+.pad .body {
+  width: 100%; height: 44px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2a3140 0%, #14181e 100%);
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.5);
+  padding: 4px 5px;
+  color: var(--silver-dim);
+  display: flex; flex-direction: column; justify-content: space-between;
+  transition: background .1s, box-shadow .1s, filter .06s;
+  position: relative;
+}
+.pad .body:hover {
+  background: linear-gradient(180deg, #35404e 0%, #1c2129 100%);
+}
+.pad.loaded .body {
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--pad) 90%, white) 0%,
+    color-mix(in oklab, var(--pad) 55%, black) 100%);
+  color: #0a0303;
+  border-color: color-mix(in oklab, var(--pad) 40%, black);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    0 0 6px color-mix(in oklab, var(--pad) 45%, transparent);
+}
+/* Old whole-body flash is retired in favour of the hit-led square above —
+   keep an empty rule so any legacy `.flash` on the body doesn't inherit the
+   previous glow. */
+.pad .body.flash { /* intentionally empty */ }
+.pad .body .slot {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700; font-size: 10px; letter-spacing: 0.14em;
+  color: currentColor;
+}
+.pad .body .chan {
+  font-size: 8px; letter-spacing: 0.08em;
+  color: currentColor; opacity: 0.7;
+  position: absolute; top: 3px; right: 5px;
+  font-family: "Share Tech Mono", monospace;
+}
+.pad .body .icon { display: none; }
+/* Small square trigger LED at the top-centre of each pad. Dark when idle,
+   fully lit in the pad's colour for ~150ms after a hit. No blur, no glow —
+   just a crisp lit square, hardware-style. */
+.pad .body .hit-led {
+  position: absolute;
+  top: 3px; left: 50%;
+  transform: translateX(-50%);
+  width: 6px; height: 6px;
+  background: #050810;
+  border: 1px solid rgba(0,0,0,0.5);
+  border-radius: 1px;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.4);
+}
+.pad.hit .body .hit-led {
+  background: var(--pad, var(--led-red));
+  border-color: color-mix(in oklab, var(--pad, var(--led-red)) 40%, black);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+.pad .label {
+  color: var(--silver-text); font-size: 10px;
+  font-family: "Barlow Condensed", sans-serif;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: center; letter-spacing: 0.05em; font-weight: 600;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+}
+
+/* ── Rows ─────────────────────────────────────────────────────────────────── */
+.row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.transport-row { gap: 4px; }
+.meter-row .knob-inline {
+  display: flex; align-items: center; gap: 6px; margin-right: 10px;
+}
+.meter-row .knob-inline span {
+  color: var(--engraved-dim); font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.14em; font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.35);
+}
+.meter-row .knob-inline em {
+  color: var(--lcd); font-weight: 400; font-style: normal;
+  font-family: "Share Tech Mono", monospace;
+  background: var(--lcd-bg); padding: 2px 6px; border-radius: 2px;
+  border: 1px solid var(--lcd-frame);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+  text-shadow: 0 0 4px var(--lcd-glow);
+}
+
+.rule {
+  display: inline-block; width: 1px; height: 20px;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.3) 50%, transparent 100%);
+  margin: 0 6px;
+}
+
+.pattern-row, .chain-row { display: flex; gap: 3px; }
+.pattern-row .pill, .chain-row .pill { min-width: 28px; padding: 3px 6px; font-size: 10.5px; }
+.chain-row .pill.sel {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-green);
+  text-shadow: 0 0 6px rgba(33,180,92,0.7);
+  border-color: #1a1d24;
+}
+/* Chain-slot pill — pattern letter + tiny × delete indicator */
+.chain-slot { display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px; }
+.chain-slot .x {
+  color: var(--engraved-dim);
+  font-size: 11px; font-weight: 700;
+  opacity: 0.5;
+}
+.chain-slot:hover .x { opacity: 1; color: var(--led-red); }
+.chain-slot.sel .x   { color: var(--led-green); opacity: 0.6; }
+
+.ctl-row { gap: 5px; }
+.ctl-row .pill { padding: 3px 8px; font-size: 10.5px; }
+.chain-line { margin-top: -4px; }
+
+/* Motion controls — horizontal above the strip */
+.motion-controls { display: flex; align-items: center; gap: 8px; padding: 2px 0 4px; }
+.dropdown-sm { padding: 3px 22px 3px 8px; font-size: 11px; width: auto; min-width: 140px; }
+.motion-controls .pill-sm { padding: 3px 8px; }
+.hint-inline { margin: 0 0 0 6px; font-size: 10px; color: var(--engraved-dim); font-style: italic; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+.nudge-inline { margin-left: auto; color: var(--engraved-dim); font-size: 10.5px; font-family: "Rajdhani", sans-serif; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+.nudge-inline strong { color: var(--engraved); font-weight: 700; }
+
+/* ── Motion editor — small illuminated squares for steps + bars ──────────── */
+.motion-block {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 8px 6px;
+  background: linear-gradient(180deg, #2c313a 0%, #1a1d24 100%);
+  border: 1px solid #05070c;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+.motion-strip {
+  display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px;
+}
+.motion-strip .step {
+  height: 20px;
+  background: linear-gradient(180deg, #35404e 0%, #1c2129 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+  color: var(--silver-dim);
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700; font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.motion-strip .step.on  {
+  background: linear-gradient(180deg, var(--led-amber) 0%, color-mix(in oklab, var(--led-amber) 60%, black) 100%);
+  color: #170e00;
+  border-color: color-mix(in oklab, var(--led-amber) 40%, black);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 4px rgba(255,153,56,0.4);
+}
+.motion-strip .step.sel {
+  outline: 1px solid var(--lcd); outline-offset: 1px;
+  box-shadow: 0 0 6px var(--lcd-glow);
+}
+.motion-strip .step.playhead {
+  outline: 1px solid var(--led-cyan); outline-offset: 1px;
+}
+.motion-strip .bar {
+  height: 110px;
+  background: #050810;
+  border: 1px solid #000;
+  border-radius: 2px;
+  display: flex; align-items: flex-end;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.7);
+}
+.motion-strip .bar > i {
+  display: block; width: 100%;
+  background: linear-gradient(180deg, var(--led-amber) 0%, color-mix(in oklab, var(--led-amber) 55%, black) 100%);
+  transition: height .1s;
+  box-shadow: 0 0 4px rgba(255,153,56,0.5);
+}
+.hint, .nudge { color: var(--engraved-dim); font-size: 11px; text-shadow: 0 1px 0 rgba(255,255,255,0.3); }
+
+/* ── TR-8S grid view ──────────────────────────────────────────────────────── */
+.tr8s-grid {
+  display: grid; gap: 2px; padding: 8px 6px;
+  background: linear-gradient(180deg, #2c313a 0%, #1a1d24 100%);
+  border: 1px solid #05070c;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+.tr8s-grid .tr8s-grid-header,
+.tr8s-grid .tr8s-grid-row {
+  display: grid;
+  grid-template-columns: 72px repeat(16, 1fr);
+  gap: 2px;
+  align-items: center;
+}
+.tr8s-grid .tr8s-grid-header > span {
+  color: var(--silver-dim);
+  font-size: 9px;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+.tr8s-grid .tr8s-grid-header > span.beat { color: var(--silver-text); }
+.tr8s-grid .row-label {
+  color: var(--silver-text);
+  font-size: 10.5px;
+  font-family: "Barlow Condensed", sans-serif;
+  padding: 3px 6px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #35404e 0%, #1c2129 100%);
+  border: 1px solid #000;
+  border-left: 2px solid var(--pad, #6b7079);
+  display: flex; align-items: center; gap: 5px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.tr8s-grid .row-label .slot {
+  color: var(--pad, var(--silver-text));
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  font-size: 9.5px; letter-spacing: 0.1em;
+  min-width: 18px;
+}
+.tr8s-grid .cell {
+  height: 22px;
+  background: linear-gradient(180deg, #35404e 0%, #1c2129 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background .06s, box-shadow .06s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.tr8s-grid .cell.beat { border-left: 1px solid rgba(255,255,255,0.1); }
+.tr8s-grid .cell:hover { filter: brightness(1.15); }
+.tr8s-grid .cell.on {
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--pad, var(--led-amber)) 90%, white) 0%,
+    color-mix(in oklab, var(--pad, var(--led-amber)) 55%, black) 100%);
+  border-color: color-mix(in oklab, var(--pad, var(--led-amber)) 40%, black);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 4px color-mix(in oklab, var(--pad, var(--led-amber)) 50%, transparent);
+}
+.tr8s-grid .cell.playhead { outline: 1px solid var(--led-cyan); }
+
+/* ── Right column: green LCD readouts & chrome knobs ─────────────────────── */
+.lcd-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 4px; margin-bottom: 6px;
+}
+.lcd-cell {
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-frame);
+  border-radius: 3px;
+  padding: 4px 8px;
+  display: flex; flex-direction: column;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.6);
+}
+.lcd-cell span {
+  color: var(--lcd-dim);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.lcd-cell b {
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 14px; font-weight: 400;
+  text-shadow: 0 0 4px var(--lcd-glow);
+}
+.lcd-cell b.on     { color: var(--led-green); text-shadow: 0 0 4px rgba(33,180,92,0.6); }
+.lcd-cell b.accent { color: var(--led-amber); text-shadow: 0 0 6px rgba(255,153,56,0.6); }
+
+.lcd-sub-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 4px 10px; margin-bottom: 10px;
+}
+.lcd-sub-grid > div {
+  display: flex; flex-direction: column;
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-frame);
+  border-radius: 3px;
+  padding: 3px 8px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+.lcd-sub-grid span {
+  color: var(--lcd-dim);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.lcd-sub-grid b {
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 12px; font-weight: 400;
+  text-shadow: 0 0 4px var(--lcd-glow);
+}
+
+/* FX knobs — chrome dials with red LED rings (drawn in kit.js knobSvg) */
+.fx-strip {
+  display: grid; grid-template-columns: 1fr 40px;
+  gap: 8px; margin-bottom: 10px;
+  padding: 8px;
+  background: linear-gradient(180deg, #b8bdc5 0%, #98a0aa 100%);
+  border: 1px solid #6b7079;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(255,255,255,0.4);
+}
+.fx-knobs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.fx-knob {
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 4px 2px;
+  cursor: ns-resize;
+  user-select: none;
+}
+.fx-knob svg { width: 32px; height: 32px; pointer-events: none; }   /* clicks bubble to .fx-knob */
+.fx-knob .lbl, .fx-knob .val { pointer-events: none; }
+.fx-knob .lbl {
+  color: var(--engraved);
+  font-family: "Rajdhani", sans-serif;
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+.fx-knob .val {
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  background: var(--lcd-bg);
+  padding: 1px 4px;
+  border-radius: 2px;
+  border: 1px solid var(--lcd-frame);
+  min-width: 22px;
+  text-shadow: 0 0 3px var(--lcd-glow);
+}
+
+/* ── Vintage master VU panel ─────────────────────────────────────────────── */
+/* Round analog VU with warm amber backing, black bezel, chrome volume knob
+   on the left, gain-reduction bar meter on the right. Matches the reference
+   photograph (Quanalog-style). */
+.vu-panel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  padding: 12px 10px 10px;
+  margin-bottom: 12px;
+  background: linear-gradient(180deg, #191b1e 0%, #0a0b0d 100%);
+  border: 1px solid #000;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.5);
+  align-items: center;
+}
+.vu-vol, .vu-gr {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.vu-caplbl {
+  color: #8a8f96;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 9px; letter-spacing: 0.22em; font-weight: 700;
+  text-transform: uppercase;
+}
+/* Chrome volume knob (matches Virus knob style) */
+.vu-knob {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #f0f2f6 0%, #b5bac2 45%, #6a6f78 100%);
+  border: 2px solid #0a0b0d;
+  box-shadow:
+    0 3px 6px rgba(0,0,0,0.5),
+    inset 0 1px 1px rgba(255,255,255,0.6),
+    inset 0 -2px 3px rgba(0,0,0,0.35);
+  cursor: ns-resize;
+  position: relative;
+}
+.vu-knob-dial {
+  position: absolute;
+  left: 50%; top: 3px;
+  width: 3px; height: 12px;
+  background: #2a2e35;
+  transform: translateX(-50%) rotate(var(--rot, 0deg));
+  transform-origin: 50% 18px;
+  border-radius: 1px;
+}
+.vu-meter {
+  padding: 4px;
+  background: linear-gradient(180deg, #0a0b0d 0%, #050607 100%);
+  border-radius: 3px;
+  border: 1px solid #000;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+.vu-meter canvas { display: block; width: 100%; height: auto; }
+.vu-gr canvas {
+  display: block;
+  background: linear-gradient(180deg, #0a0b0d 0%, #050607 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* ── Plugin chain ────────────────────────────────────────────────────────── */
+.plugin-chain {
+  display: flex; flex-direction: column; gap: 3px;
+  background: linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  border: 1px solid #05070c;
+  border-radius: 3px;
+  padding: 4px;
+  min-height: 30px;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.6);
+}
+.plugin-empty {
+  color: var(--silver-dim);
+  font-family: "Rajdhani", sans-serif;
+  font-size: 11px;
+  font-style: italic;
+  padding: 6px 8px;
+}
+.plugin-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto auto;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 6px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 2px;
+  border-left: 2px solid var(--led-cyan);
+}
+.plugin-row.bypassed { opacity: 0.5; border-left-color: var(--silver-dim); }
+.plugin-row .idx {
+  color: var(--silver-dim);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+}
+.plugin-row .name {
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  text-shadow: 0 0 3px var(--lcd-glow);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.plugin-row .kind {
+  color: var(--silver-dim); font-family: "Rajdhani", sans-serif;
+  font-size: 9px; letter-spacing: 0.14em;
+}
+.plugin-row .btn-mini {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--silver-text);
+  border: 1px solid #1a1d24;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.plugin-row .btn-mini:hover { filter: brightness(1.2); }
+.plugin-row .btn-mini.rm { color: var(--led-red); }
+.plugin-add { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+.plugin-add .dropdown { flex: 1; }
+
+/* ── Pad card / sample card (chrome panels on silver) ────────────────────── */
+.pad-card, .sample-card {
+  background: linear-gradient(180deg, #b8bdc5 0%, #98a0aa 100%);
+  border: 1px solid #6b7079;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  display: flex; flex-direction: column; gap: 6px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 1px 0 rgba(255,255,255,0.4);
+}
+.pad-card header, .sample-card header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 4px; border-bottom: 1px solid rgba(0,0,0,0.15);
+}
+.pad-card header b {
+  font-size: 11px; letter-spacing: 0.16em;
+  font-family: "Rajdhani", sans-serif; font-weight: 700;
+  color: var(--engraved);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+.row-mini { display: flex; gap: 4px; flex-wrap: wrap; }
+.mode-row, .choke-row, .colour-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.choke-cells { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; flex: 1; }
+.chip {
+  background: linear-gradient(180deg, #dde1e6 0%, #b0b5be 100%);
+  border: 1px solid #6b7079;
+  color: var(--engraved);
+  border-radius: 2px; padding: 2px 5px;
+  font-size: 10px; font-weight: 700;
+  font-family: "Rajdhani", sans-serif;
+  cursor: pointer; text-align: center;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.chip.active {
+  background: linear-gradient(180deg, #444a55 0%, #2c313a 100%);
+  color: var(--led-red);
+  border-color: #1a1d24;
+  text-shadow: 0 0 4px rgba(255,42,28,0.6);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+}
+.swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; flex: 1; }
+.swatch {
+  border-radius: 2px; width: 100%; height: 18px;
+  border: 1px solid #4a4f58;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.swatch.sel { border-color: var(--led-red); box-shadow: 0 0 4px rgba(255,42,28,0.5); }
+.sample-name {
+  padding: 4px 6px;
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-frame);
+  border-radius: 2px;
+  color: var(--lcd);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  text-shadow: 0 0 3px var(--lcd-glow);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* Pad-shape sliders */
+.pad-shape {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.15); margin-top: 4px;
+}
+.pad-shape .knob-inline { display: flex; align-items: center; gap: 8px; font-size: 10.5px; }
+.pad-shape .knob-inline span {
+  color: var(--engraved); font-family: "Rajdhani", sans-serif;
+  min-width: 44px; text-transform: uppercase; letter-spacing: 0.14em;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+.pad-shape .knob-inline input[type="range"] { flex: 1; width: auto; }
+.pad-shape .knob-inline em {
+  color: var(--lcd); font-style: normal; font-weight: 400;
+  font-family: "Share Tech Mono", monospace;
+  background: var(--lcd-bg); padding: 2px 5px; border-radius: 2px;
+  border: 1px solid var(--lcd-frame);
+  min-width: 46px; text-align: right;
+  text-shadow: 0 0 3px var(--lcd-glow);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* ── Waveform ─────────────────────────────────────────────────────────────── */
+.wave {
+  width: 100%; height: 70px;
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-frame);
+  border-radius: 2px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}
+
+/* ── Sample browser list / kit picker ─────────────────────────────────────── */
+.sample-list, .kit-picker {
+  list-style: none; margin: 0; padding: 0;
+  max-height: 380px; overflow-y: auto;
+  background: linear-gradient(180deg, #1c1f26 0%, #10131a 100%);
+  border: 1px solid #05070c;
+  border-radius: 3px;
+  box-shadow: inset 0 2px 3px rgba(0,0,0,0.6);
+}
+.sample-list li, .kit-picker li {
+  padding: 5px 8px; font-size: 11px;
+  color: var(--silver-dim);
+  font-family: "Rajdhani", sans-serif;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sample-list li:hover, .kit-picker li:hover {
+  background: rgba(107,255,154,0.08);
+  color: var(--lcd);
+  text-shadow: 0 0 4px var(--lcd-glow);
+}
+.sample-list li .path { color: var(--silver-dim); font-size: 10px; margin-left: 6px; opacity: 0.6; }
+
+.modal-card-lg { min-width: 720px; max-width: 900px; }
+
+/* ── Draggable affordances ────────────────────────────────────────────────── */
+.motion-strip .bar, .fx-knob svg, .fader-track { cursor: ns-resize; }
+.motion-strip .bar > i { pointer-events: none; }
+.dragging, .dragging * { user-select: none !important; }
+
+/* ── Modal ────────────────────────────────────────────────────────────────── */
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(10, 12, 18, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: linear-gradient(180deg, #d4d8de 0%, #a8adb6 100%);
+  border: 1px solid #6b7079;
+  border-radius: 4px;
+  padding: 18px 20px;
+  min-width: 460px; max-width: 620px;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.modal-card header {
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,0.2);
+  padding-bottom: 8px; margin-bottom: 4px;
+}
+.modal-card header b {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--engraved); text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+.settings-row { display: flex; align-items: center; gap: 10px; }
+.settings-row .section-label { min-width: 110px; }
+.settings-row .dropdown { flex: 1; }
+.settings-row code {
+  background: var(--lcd-bg); padding: 1px 4px; border-radius: 2px;
+  font-family: "Share Tech Mono", monospace; font-size: 10.5px;
+  color: var(--lcd); border: 1px solid var(--lcd-frame);
+}
+
+/* Playing pads use the same LED indicator, no blur/glow on the tube itself. */
+.pad.playing .body .hit-led {
+  background: var(--pad, var(--led-red));
+  border-color: color-mix(in oklab, var(--pad, var(--led-red)) 40%, black);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+
+/* ── Access Virus XL rack module ─────────────────────────────────────────── */
+/* 1U rackmount aesthetic: matte-black brushed chassis, silver etched
+   "ACCESS" wordmark, small blue LCD (cyan-on-navy), grey rotary encoders
+   with white pointer, illuminated blue push-buttons. Sits below the kit
+   view as a separate signal-flow region. */
+.divider {
+  border: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+  margin: 8px 0 6px;
+}
+/* Red cherry chassis with brushed-silver rack ears — the red Virus rack
+   variant sitting in a 1U slot. Fixed width + margin auto centres it in
+   the page instead of stretching corner-to-corner. */
+.virus-rack {
+  /* Lives inside .col-center as a full-span bottom row. Grid-column 1/-1
+     makes it stretch across both sub-columns (seq + detail), so it's
+     sandwiched between the kits column (left) and master bus (right). */
+  grid-column: 1 / -1;
+  --rack-red-top: #d81a1e;
+  --rack-red-bot: #9c0e12;
+  --rack-red-dk:  #6a0a0d;
+  --rack-silver-top: #eaecef;
+  --rack-silver-bot: #7a8088;
+  background:
+    /* very fine brushed noise on the red panel */
+    repeating-linear-gradient(90deg,
+      rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px,
+      rgba(0,0,0,0.02) 1px, rgba(0,0,0,0.02) 2px),
+    /* subtle vignette to sell the metal curvature */
+    radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,0.08), transparent 60%),
+    linear-gradient(180deg, var(--rack-red-top) 0%, var(--rack-red-bot) 100%);
+  border-top:    1px solid rgba(0,0,0,0.5);
+  border-bottom: 2px solid var(--rack-red-dk);
+  padding: 8px 78px 8px 78px;      /* room for the silver rack ears */
+  margin: 8px 0 0;                  /* naturally fills the grid row */
+  width: auto;                      /* stretch to the col-center width */
+  color: #f8f8f8;
+  position: relative;
+  font-family: "Rajdhani", sans-serif;
+  flex-shrink: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.15),
+    inset 0 -2px 6px rgba(0,0,0,0.35),
+    0 3px 10px rgba(0,0,0,0.5);
+  overflow: hidden;
+  min-height: 108px;
+}
+/* Silver rack ears (mounting bracket look) with two "mounting screws". */
+.virus-rack::before, .virus-rack::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 66px;
+  background:
+    /* mounting holes — small darker circles top and bottom */
+    radial-gradient(circle at 50% 14px, #2a2e33 0 4px, transparent 5px),
+    radial-gradient(circle at 50% calc(100% - 14px), #2a2e33 0 4px, transparent 5px),
+    /* brushed vertical streak */
+    repeating-linear-gradient(180deg,
+      rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
+      rgba(0,0,0,0.03) 1px, rgba(0,0,0,0.03) 2px),
+    linear-gradient(180deg, var(--rack-silver-top) 0%, var(--rack-silver-bot) 100%);
+  border-right: 1px solid rgba(0,0,0,0.35);
+  box-shadow:
+    inset -2px 0 4px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.5);
+  z-index: 2;
+}
+.virus-rack::before { left: 0; }
+.virus-rack::after {
+  right: 0;
+  border-right: 0;
+  border-left: 1px solid rgba(0,0,0,0.35);
+  box-shadow:
+    inset 2px 0 4px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.5);
+}
+/* The brand strip sits on the LEFT ear (silver) — small tilted wordmark
+   like the printed logo on the actual rack. */
+.rack-brand {
+  position: absolute;
+  left: 4px; top: 8px;
+  width: 66px;
+  z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.rack-star {
+  color: #2a2e33; font-size: 14px; line-height: 1;
+  transform: rotate(-14deg);
+}
+.rack-word {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700; font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #2a2e33;
+  transform: rotate(-14deg);
+  line-height: 1;
+}
+.rack-xl {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700; font-size: 9px;
+  color: #4a4f58; letter-spacing: 0.18em;
+  margin-top: 6px;
+}
+/* The engraved-white section names above the controls. */
+.rack-strip-labels {
+  display: grid;
+  grid-template-columns: 132px 100px 1fr 1fr;
+  padding: 0 0 2px;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* ── Rack face row ─────────────────────────────────────────────────────── */
+/* Encoders · LCD · buttons · (main knobs · soft knobs, tightly clustered) */
+.rack-face {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 6px;
+  position: relative;
+  z-index: 1;
+}
+.rack-face .rack-encoders { flex: 0 0 auto; }
+/* Fixed LCD width so short → long text swaps don't jiggle the whole rack. */
+.rack-face .rack-lcd      { flex: 0 0 210px; min-width: 210px; box-sizing: border-box; }
+.rack-face .rack-buttons  { flex: 0 0 auto; }
+.rack-face .rack-knobs    { flex: 0 0 auto; }
+
+/* Little data encoders on the left of the rack */
+.rack-encoders {
+  display: flex; gap: 8px;
+  padding: 0 4px;
+}
+.vencoder {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: ns-resize;
+}
+.vencoder-dial {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #4a4f58 0%, #2a2e33 60%, #0a0c10 100%);
+  border: 1px solid #000;
+  box-shadow:
+    0 2px 3px rgba(0,0,0,0.6),
+    inset 0 1px 1px rgba(255,255,255,0.18);
+  position: relative;
+}
+.vencoder-dial::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 2px;
+  width: 2px; height: 7px;
+  background: #f0f2f5;
+  transform: translateX(-50%) rotate(var(--rot, 0deg));
+  transform-origin: 50% 11px;
+  border-radius: 1px;
+}
+.vencoder span {
+  font-size: 7px;
+  letter-spacing: 0.16em;
+  color: rgba(255,255,255,0.6);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Dot-matrix amber LCD (recessed into a dark grey inset). */
+.rack-lcd {
+  background:
+    /* faint horizontal scanlines */
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px,
+      transparent 1px, transparent 2px),
+    linear-gradient(180deg, #3a3624 0%, #1e1a08 100%);
+  border: 2px solid #14100a;
+  border-radius: 1px;
+  padding: 5px 10px;
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.8),
+    0 1px 0 rgba(255,255,255,0.08);
+  color: #ffb020;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  text-shadow: 0 0 4px rgba(255,176,32,0.6);
+  min-height: 38px;
+}
+
+/* Small grey square soft-buttons — 2×2 grid, unlit look like the reference. */
+.rack-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  padding: 0 4px;
+}
+.rbtn {
+  background:
+    radial-gradient(circle at 30% 25%, #8a8f96 0%, #5a6068 45%, #2a2e33 100%);
+  border: 1px solid #0a0c10;
+  color: transparent;             /* no text — the label sits above the button */
+  font-size: 0;
+  height: 22px; min-height: 22px;
+  border-radius: 1px;
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.35),
+    inset 0 -2px 3px rgba(0,0,0,0.4),
+    0 1px 1px rgba(0,0,0,0.35);
+  cursor: pointer;
+  position: relative;
+  transition: box-shadow .1s;
+}
+.rbtn::after {
+  /* Tiny yellow status LED at the top-left of each button. */
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: #3a2200;
+}
+.rbtn.on {
+  background:
+    radial-gradient(circle at 30% 25%, #a8adb6 0%, #6a6f78 45%, #3a3e44 100%);
+}
+.rbtn.on::after {
+  background: #ffb020;
+  box-shadow: 0 0 4px rgba(255,176,32,0.85);
+}
+/* Preserve the button role for screen readers even though visual text hidden. */
+.rbtn > span.rbtn-label {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+}
+
+/* Big parameter knobs — main + soft banks sit side-by-side, tightly clustered
+   like the reference rack (small gap within each bank, thin divider between). */
+.rack-knobs {
+  display: grid;
+  grid-template-columns: repeat(4, 32px);
+  gap: 4px;
+  padding: 0;
+}
+.rack-knobs-soft { position: relative; margin-left: 6px; padding-left: 8px; }
+.rack-knobs-soft::before {
+  content: '';
+  position: absolute; top: 5%; bottom: 5%; left: 0;
+  width: 1px;
+  background: rgba(0,0,0,0.35);
+}
+.vknob {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: ns-resize;
+}
+.vknob-dial {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #4a4f58 0%, #2a2e33 60%, #0a0c10 100%);
+  border: 1px solid #000;
+  box-shadow:
+    0 2px 3px rgba(0,0,0,0.6),
+    inset 0 1px 1px rgba(255,255,255,0.18);
+  position: relative;
+}
+.vknob-dial::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: 2px;
+  width: 2px; height: 7px;
+  background: #ffffff;
+  transform: translateX(-50%) rotate(var(--rot, -135deg));
+  transform-origin: 50% 11px;
+  border-radius: 1px;
+  box-shadow: 0 0 1px rgba(0,0,0,0.6);
+}
+.vknob span {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 7.5px;
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.9);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* No trailing rack ear inside — the panel's own ::after pseudo is the ear. */
+.rack-ear-right { display: none; }
+
+/* ── PADS → MIDI drop area (below the rack face) ─────────────────────────── */
+.virus-pads, .virus-pgm, .virus-songs {
+  border-top: 1px solid rgba(0,0,0,0.35);
+  padding: 6px 0 2px;
+  margin-top: 4px;
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Song bank header: song dropdown + editable song name. */
+.song-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 2px 4px;
+}
+.song-select {
+  width: 180px;
+  background: linear-gradient(180deg, #6a0a0d 0%, #3a0508 100%) !important;
+  background-color: #3a0508 !important;
+  color: #ffb020 !important;
+  text-shadow: 0 0 3px rgba(255,176,32,0.5);
+  border-color: #000 !important;
+  font-family: "Share Tech Mono", monospace !important;
+  font-size: 11px !important;
+}
+.song-select option { background: #3a0508; color: #ffb020; }
+.song-name {
+  flex: 1;
+  background: linear-gradient(180deg, #6a0a0d 0%, #3a0508 100%);
+  background-color: #3a0508;
+  border: 1px solid #000;
+  color: #ffb020;
+  padding: 4px 8px;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 12px;
+  text-shadow: 0 0 3px rgba(255,176,32,0.5);
+  outline: none;
+  border-radius: 1px;
+}
+
+/* 8 clip pads across. */
+.song-clips {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.clip-pad {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 5px 4px;
+  background: linear-gradient(180deg, #6a0a0d 0%, #3a0508 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+  min-height: 84px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  cursor: pointer;
+  position: relative;
+  transition: box-shadow .1s, transform .05s;
+}
+.clip-pad:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 6px rgba(255,176,32,0.3); }
+.clip-pad:active { transform: translateY(1px); }
+.clip-pad.dragover {
+  border-color: #ffb020;
+  box-shadow: inset 0 0 8px rgba(255,176,32,0.55);
+}
+.clip-pad.hasClip {
+  background: linear-gradient(180deg, #8a1620 0%, #5a0710 100%);
+  border-color: #ffb020;
+}
+.clip-pad.muted { opacity: 0.4; }
+.clip-pad.firing {
+  box-shadow: 0 0 10px rgba(255,176,32,0.85), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.clip-pad .cp-head {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.clip-pad .cp-name {
+  background: transparent; border: none; outline: none;
+  color: #fff; font-family: "Rajdhani", sans-serif; font-weight: 700;
+  font-size: 10px; letter-spacing: 0.06em; padding: 0;
+  width: 62%;
+  text-transform: uppercase;
+}
+.clip-pad .cp-arm {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #3a2200; border: 1px solid #000;
+  cursor: pointer; padding: 0;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+.clip-pad .cp-arm.on {
+  background: #ffb020;
+  box-shadow: 0 0 5px rgba(255,176,32,0.85), inset 0 1px 1px rgba(255,255,255,0.4);
+}
+
+/* Ch + PGM inline editors — two tiny LCD-style number pockets */
+.clip-pad .cp-mididata {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+.clip-pad .cp-mididata > label {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,0,0,0.6);
+  border-radius: 1px;
+  padding: 1px 2px;
+}
+.clip-pad .cp-mididata span {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 7.5px; letter-spacing: 0.14em; font-weight: 700;
+  color: rgba(255,255,255,0.65);
+}
+.clip-pad .cp-mididata input {
+  background: transparent; border: none; outline: none;
+  color: #ffb020; text-shadow: 0 0 3px rgba(255,176,32,0.55);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px; width: 100%; text-align: center; padding: 0;
+  -moz-appearance: textfield;
+}
+.clip-pad .cp-mididata input::-webkit-outer-spin-button,
+.clip-pad .cp-mididata input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+
+.clip-pad .cp-clip {
+  display: flex; align-items: center; justify-content: space-between; gap: 3px;
+  color: #ffd070; font-family: "Barlow Condensed", sans-serif;
+  font-size: 9px; letter-spacing: 0.04em;
+  overflow: hidden;
+}
+.clip-pad .cp-clip .cp-clipname {
+  flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: rgba(255,255,255,0.55);
+}
+.clip-pad.hasClip .cp-clipname { color: #ffd070; }
+.clip-pad .cp-clip button {
+  background: transparent; border: 1px solid rgba(0,0,0,0.5);
+  color: rgba(255,255,255,0.6); border-radius: 1px;
+  font-size: 8px; padding: 1px 3px;
+  cursor: pointer;
+  font-family: "Rajdhani", sans-serif; letter-spacing: 0.1em;
+}
+.clip-pad .cp-clip button:hover { color: #ffb020; border-color: #ffb020; }
+.virus-pad-row, .virus-pgm-row {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 3px;
+}
+.virus-pad-row .vpad {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 4px 3px;
+  background: linear-gradient(180deg, #6a0a0d 0%, #3a0508 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+  cursor: pointer;
+  min-height: 44px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.virus-pad-row .vpad.dragover {
+  border-color: #ffb020;
+  box-shadow: inset 0 0 8px rgba(255,176,32,0.55);
+}
+.virus-pad-row .vpad.hasClip {
+  background: linear-gradient(180deg, #8a1620 0%, #5a0710 100%);
+  border-color: #ffb020;
+}
+.virus-pad-row .vpad .slot {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 8px; letter-spacing: 0.14em; font-weight: 700;
+  color: rgba(255,255,255,0.65);
+}
+.virus-pad-row .vpad .vnote {
+  background: transparent; border: none; outline: none;
+  color: #ffb020; font-family: "Share Tech Mono", monospace;
+  text-shadow: 0 0 3px rgba(255,176,32,0.55);
+  font-size: 11px; width: 100%; text-align: center;
+  padding: 0;
+}
+.virus-pad-row .vpad .cliplbl {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 8.5px; letter-spacing: 0.06em;
+  color: #ffd070;
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.virus-pad-row .vpad .miniload {
+  color: rgba(255,255,255,0.55);
+  font-size: 9px;
+  background: transparent;
+  border: 1px solid rgba(0,0,0,0.4);
+  border-radius: 2px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.virus-pad-row .vpad .miniload:hover { color: #ffb020; border-color: #ffb020; }
+
+.virus-pgm-row {
+  grid-template-columns: repeat(10, 1fr);
+}
+.virus-pgm-row .vpgm {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 4px 3px;
+  background: linear-gradient(180deg, #6a0a0d 0%, #3a0508 100%);
+  border: 1px solid #000;
+  border-radius: 2px;
+}
+.virus-pgm-row .vpgm .lbl {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 9px; letter-spacing: 0.14em; font-weight: 700;
+  color: rgba(255,255,255,0.65);
+}
+.virus-pgm-row .vpgm input {
+  background: transparent; border: none; outline: none;
+  color: #ffb020; font-family: "Share Tech Mono", monospace;
+  text-shadow: 0 0 3px rgba(255,176,32,0.5);
+  font-size: 12px; width: 100%; text-align: center;
+  padding: 0;
+}
+.virus-rack .section-label {
+  color: rgba(255,255,255,0.65);
+  font-size: 9px; letter-spacing: 0.2em;
+  padding: 0 2px;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.3);
+}
+.virus-rack .hint {
+  color: rgba(255,255,255,0.45);
+  font-size: 10px; font-style: italic;
+  padding: 0 2px;
+}
+
+/* ── Status bar (LCD strip along the bottom) ─────────────────────────────── */
+.statusbar {
+  background: var(--lcd-bg);
+  border-top: 1px solid var(--lcd-frame);
+  padding: 5px 14px;
+  color: var(--lcd);
+  font-size: 11px;
+  font-family: "Share Tech Mono", monospace;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 3px var(--lcd-glow);
+  flex-shrink: 0;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+}

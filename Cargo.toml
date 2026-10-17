@@ -1,0 +1,31 @@
+[workspace]
+members = ["crates/engine", "src-tauri"]
+resolver = "2"
+
+[workspace.package]
+version    = "0.1.0"
+edition    = "2021"
+authors    = ["Robert Bartley <rob.bartley.uk@gmail.com>"]
+license    = "MIT"
+repository = "https://github.com/bartleyrob/kit-engine-rs"
+
+[workspace.dependencies]
+# Cross-platform audio (WASAPI / CoreAudio / ALSA).
+cpal       = "0.15"
+# Cross-platform MIDI (WinMM / CoreMIDI / ALSA).
+midir      = "0.10"
+# WAV loader. hound is tiny and works for the PCM files kits use.
+hound      = "3.5"
+# JSON (used by the Tauri bridge and the engine for debug payloads).
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Logging — Tauri picks these up and routes to the UI console in dev.
+log        = "0.4"
+env_logger = "0.11"
+
+[profile.release]
+# Tauri's defaults are fine, but we want LTO for the audio hot path.
+opt-level = 3
+lto       = "thin"
+codegen-units = 1
+strip = "symbols"

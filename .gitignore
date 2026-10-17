@@ -1,0 +1,19 @@
+target/
+Cargo.lock
+dist/
+
+# Tauri build output
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/.cargo/
+# Auto-generated schemas / capabilities (tauri-build regenerates each build).
+src-tauri/gen/
+
+# IDE
+.vscode/
+.idea/
+*.user
+
+# Local scratch
+*.log
+.env

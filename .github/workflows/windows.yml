@@ -1,0 +1,47 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./ -> target"
+
+      - name: Test (engine crate)
+        run: cargo test -p kit-engine --release
+
+      - name: Install tauri-cli
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: Build bundle
+        run: npx tauri build --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          $out = "kit-engine-rs-windows-x64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item target/release/kit-engine-app.exe $out/KitStation.exe
+          # Include any installers the Tauri bundler produced.
+          Get-ChildItem target/release/bundle -Recurse -File |
+            Where-Object { $_.Extension -in '.msi','.exe','.nsis' } |
+            ForEach-Object { Copy-Item $_.FullName $out/ }
+          Compress-Archive -Path $out -DestinationPath "$out.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kit-engine-rs-windows-x64
+          path: kit-engine-rs-windows-x64.zip

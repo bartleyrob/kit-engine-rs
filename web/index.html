@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KitStation — Kit</title>
+  <!-- Never cache the shell assets — WebView2 is aggressive and we want every
+       launch to pick up a rebuilt web\ folder without reload gymnastics. -->
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+  <meta http-equiv="Pragma"        content="no-cache" />
+  <meta http-equiv="Expires"       content="0" />
+  <!-- Fonts for the Synth-Luxury style: Rajdhani (labels), Share Tech Mono
+       (LCD), Barlow Condensed (pad legends), JetBrains Mono (numerics). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="/kit.css?v=34" />
+</head>
+<body>
+  <!-- Header — kit toolbar. No top-level app nav; this is a standalone Kit app. -->
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">Kit</span>Station</div>
+    <div class="kit-name-wrap">
+      <input class="kit-name" id="kitName" value="Untitled" spellcheck="false" />
+    </div>
+    <div class="toolbar">
+      <button class="pill">+ NEW</button>
+      <button class="pill pill-ok" id="btnSave">Save</button>
+      <button class="pill">Export</button>
+      <button class="pill">TR-8S Zip</button>
+      <button class="pill">Bounce</button>
+      <button class="pill">MIDI</button>
+      <button class="pill">Random</button>
+      <button class="pill pill-danger" id="btnStopAll">Stop all</button>
+    </div>
+    <div class="topbar-right">
+      <span class="filled"><strong>11</strong>/16 filled</span>
+      <button class="pill pill-sm" id="btnSaveKit">SAVE</button>
+      <button class="pill pill-sm" id="btnLoadKit">LOAD</button>
+      <button class="pill pill-sm" id="btnSettings" title="Audio &amp; MIDI settings">⚙ AUDIO / MIDI</button>
+      <button class="linklike">delete kit</button>
+    </div>
+  </header>
+
+  <!-- Sample browser modal -->
+  <div class="modal" id="browserModal" hidden>
+    <div class="modal-card modal-card-lg">
+      <header>
+        <b>Sample browser <span class="muted-sm" id="browserPad"></span></b>
+        <button class="pill pill-sm" id="browserClose">✕</button>
+      </header>
+      <div class="settings-row">
+        <span class="section-label">FOLDER</span>
+        <input class="dropdown" id="browserRoot" placeholder="Pick a folder…" readonly style="flex:1" />
+        <button class="pill" id="browserPick">Pick…</button>
+        <button class="pill" id="browserRefresh">↻</button>
+      </div>
+      <input class="filter-input" id="browserFilter" placeholder="filter by name…" />
+      <ul class="sample-list" id="sampleList"></ul>
+      <em class="hint">Double-click a sample to assign it to the current pad. Path is stored — the file is only read at trigger time.</em>
+    </div>
+  </div>
+
+  <!-- Kit-load modal (name picker over saved kits) -->
+  <div class="modal" id="kitsModal" hidden>
+    <div class="modal-card">
+      <header><b>Saved kits</b><button class="pill pill-sm" id="kitsClose">✕</button></header>
+      <ul class="kit-picker" id="kitsPickerList"></ul>
+      <em class="hint">Kits live in %LOCALAPPDATA%\KitStation\kits\.</em>
+    </div>
+  </div>
+
+  <!-- Settings modal — audio device + MIDI input pickers -->
+  <div class="modal" id="settingsModal" hidden>
+    <div class="modal-card">
+      <header>
+        <b>Audio &amp; MIDI</b>
+        <button class="pill pill-sm" id="settingsClose">✕</button>
+      </header>
+      <label class="settings-row">
+        <span class="section-label">AUDIO DEVICE</span>
+        <select class="dropdown" id="audioDeviceSel"></select>
+      </label>
+      <em class="hint">ASIO drivers are listed but not openable until the
+        Steinberg ASIO SDK is dropped into <code>vendor/asiosdk/</code>.
+        Pick a WASAPI device for now.</em>
+
+      <label class="settings-row">
+        <span class="section-label">MIDI INPUT</span>
+        <select class="dropdown" id="midiInputSel">
+          <option value="-1">(none)</option>
+        </select>
+      </label>
+      <em class="hint">GM drum map: 36 = kick, 38 = snare, 42 = closed hat, 46 = open hat, …</em>
+
+      <label class="settings-row">
+        <span class="section-label">MIDI OUTPUT</span>
+        <select class="dropdown" id="midiOutputSel">
+          <option value="-1">(none)</option>
+        </select>
+      </label>
+      <em class="hint">Drives the Access Virus rack section — song clips, PANIC, and the eight parameter knobs are routed here.</em>
+
+      <div class="settings-row" style="justify-content: flex-end; gap: 6px;">
+        <button class="pill" id="settingsRefresh">↻ Refresh devices</button>
+        <button class="pill pill-active" id="settingsDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="workspace">
+    <!-- ── Kits column ────────────────────────────────────────────────────── -->
+    <aside class="col-kits">
+      <div class="col-header">
+        <span class="col-label">KITS</span>
+        <button class="pill pill-sm">+ NEW</button>
+      </div>
+      <ul class="kit-list" id="kitList"></ul>
+
+      <div class="col-header">
+        <span class="col-label">PRESETS</span>
+        <span class="muted-sm">51</span>
+      </div>
+      <input class="filter-input" placeholder="filter…" />
+      <ul class="kit-list preset-list" id="presetList"></ul>
+    </aside>
+
+    <!-- ── Center column: pads + transport + motion ──────────────────────── -->
+    <section class="col-center">
+     <div class="seq-col">
+      <!-- Top strip: transport + tempo only. PADS toggle moved down to sit
+           tightly with the pad row. -->
+      <div class="row top-strip">
+        <button class="pill-led play" id="btnPlay">PLAY</button>
+        <button class="pill-led rec"  id="btnRec">REC</button>
+        <button class="pill pill-blue" id="btnKeys">KEYS</button>
+        <span class="rule"></span>
+        <label class="knob-inline">
+          <span>BPM</span>
+          <input type="number" value="164.0" step="0.1" id="bpm" />
+        </label>
+        <label class="knob-inline">
+          <span>SWING</span>
+          <input type="range" min="0" max="100" value="0" id="swing" />
+          <em id="swingVal">0%</em>
+        </label>
+        <label class="knob-inline">
+          <span>VEL</span>
+          <input type="range" min="0" max="127" value="127" id="vel" />
+          <em id="velVal">127</em>
+        </label>
+      </div>
+
+      <!-- TR-8S / Grid toggle sits attached to the pad row as one unit. -->
+      <div class="pad-group">
+        <div class="tab-strip">
+          <span class="section-label">PADS</span>
+          <button class="pill" id="padsGrid">Grid</button>
+          <button class="pill pill-active" id="padsTr8s">TR-8S</button>
+        </div>
+        <div class="pad-row" id="padRow"></div>
+      </div>
+
+      <!-- PATTERN + clipboard, below the pads -->
+      <div class="row pattern-strip">
+        <span class="section-label">PATTERN</span>
+        <div class="pattern-row" id="patternRow"></div>
+        <span class="rule"></span>
+        <button class="pill">⧉ COPY</button>
+        <button class="pill">↻ PASTE</button>
+      </div>
+
+      <!-- Row 3: auto-fill + chain state + view toggle, all on one line -->
+      <div class="row ctl-row">
+        <span class="section-label">AUTO FILL</span>
+        <button class="pill pill-on">ON</button>
+        <button class="pill pill-on">1</button>
+        <button class="pill">2</button>
+        <button class="pill">⚡ FILL</button>
+        <span class="rule"></span>
+        <span class="section-label">CHAIN</span>
+        <button class="pill" id="chainOn">ON</button>
+        <em class="muted" id="chainLen">0 bars</em>
+        <a href="#" class="linklike" id="chainClear">clear</a>
+        <span class="rule"></span>
+        <span class="section-label">VIEW</span>
+        <button class="pill pill-active" id="viewMotion">◧ Motion</button>
+        <button class="pill" id="viewGrid">■ Grid</button>
+      </div>
+
+      <!-- Row 4: chain sequence — dynamic. Shift-click a pattern pill to add. -->
+      <div class="row chain-line">
+        <div class="chain-row" id="chainRow"></div>
+      </div>
+
+      <!-- Motion view (default) -->
+      <div class="motion-block" id="motionView">
+        <!-- Controls run horizontally above the strip, no more stacked column -->
+        <div class="motion-controls">
+          <select class="dropdown dropdown-sm" id="motionPad"></select>
+          <select class="dropdown dropdown-sm" id="motionParam">
+            <option>Velocity</option><option>Probability</option><option>Sub-step</option><option>Alternate</option>
+          </select>
+          <button class="pill pill-sm">CLEAR</button>
+          <em class="hint hint-inline">click a step to toggle · drag a bar to set velocity</em>
+          <span class="nudge-inline">Nudge <strong>0ms</strong></span>
+        </div>
+
+        <div class="motion-strip" id="motionStrip"></div>
+      </div>
+
+      <!-- TR-8S grid view (all 11 pads × 16 steps) — hidden by default -->
+      <div class="tr8s-grid" id="tr8sGridView" hidden>
+        <div class="tr8s-grid-header">
+          <span></span>
+          <!-- 16 step number labels populated by JS -->
+        </div>
+        <!-- 11 rows populated by JS: [pad label] [16 cells] -->
+      </div>
+     </div>  <!-- /.seq-col -->
+
+      <!-- PAD 1 + SAMPLE — sit as a second column right of the sequencer. -->
+      <div class="detail-col">
+        <section class="pad-card">
+          <header>
+            <b>PAD 1</b>
+            <div class="row-mini">
+              <button class="pill pill-sm">⧉ COPY</button>
+              <button class="pill pill-sm">↻ PASTE</button>
+            </div>
+          </header>
+
+          <input class="pad-name" value="Kick" spellcheck="false" />
+
+          <div class="mode-row">
+            <span class="section-label">MODE</span>
+            <button class="pill pill-active">One-shot</button>
+            <button class="pill">Loop</button>
+            <button class="pill">Gate</button>
+            <button class="pill">One-trig</button>
+          </div>
+          <em class="hint">plays through once on each hit</em>
+
+          <div class="choke-row">
+            <span class="section-label">CHOKE</span>
+            <div class="choke-cells">
+              <button class="chip">—</button>
+              <button class="chip active">1</button>
+              <button class="chip">2</button><button class="chip">3</button>
+              <button class="chip">4</button><button class="chip">5</button>
+              <button class="chip">6</button><button class="chip">7</button>
+              <button class="chip">8</button>
+            </div>
+          </div>
+
+          <div class="colour-row">
+            <span class="section-label">COLOUR</span>
+            <div class="swatches" id="swatches"></div>
+          </div>
+
+          <!-- Per-pad shape controls: pitch, decay, gain -->
+          <div class="pad-shape">
+            <label class="knob-inline">
+              <span>PITCH</span>
+              <input type="range" min="-24" max="24" value="0" step="1" id="padPitch" />
+              <em id="padPitchVal">0st</em>
+            </label>
+            <label class="knob-inline">
+              <span>DECAY</span>
+              <input type="range" min="0.05" max="4" value="4" step="0.05" id="padDecay" />
+              <em id="padDecayVal">4.00s</em>
+            </label>
+            <label class="knob-inline">
+              <span>GAIN</span>
+              <input type="range" min="0" max="2" value="1" step="0.01" id="padGain" />
+              <em id="padGainVal">1.00</em>
+            </label>
+          </div>
+        </section>
+
+        <section class="sample-card">
+          <header>
+            <span class="section-label">SAMPLE</span>
+            <div class="row-mini">
+              <button class="pill pill-sm" id="btnReverse">⇄ REVERSE</button>
+              <button class="pill pill-sm" id="btnNormalize">NORM</button>
+              <button class="pill pill-sm" id="btnPreview">▶</button>
+              <button class="pill pill-sm" id="btnResetSample">RESET</button>
+            </div>
+          </header>
+          <div class="sample-name muted-sm">01 Kick</div>
+          <div class="row-mini">
+            <button class="pill pill-lg pill-blue" id="btnBrowseSample">BROWSE…</button>
+            <button class="pill pill-lg" id="btnLoadSample">LOAD FILE…</button>
+            <button class="pill" id="btnClearSample">CLEAR</button>
+          </div>
+          <canvas id="wave" class="wave" width="640" height="80"></canvas>
+          <a class="linklike accent" href="#" id="btnTrigger">▶ trigger</a>
+        </section>
+      </div>  <!-- /.detail-col -->
+
+      <!-- ── EXTERNAL MIDI — Access Virus XL-style rackmount panel ────────
+           Lives inside .col-center as a full-span bottom row, so it sits
+           sandwiched between the kits column (left) and master bus (right). -->
+      <section class="virus-rack">
+        <div class="rack-brand">
+          <span class="rack-star">✦</span>
+          <span class="rack-word">access</span>
+          <span class="rack-xl">XL</span>
+        </div>
+
+        <div class="rack-strip-labels">
+          <span>DEVICE</span><span>PATCH</span><span>PARAMETERS</span><span>SOFT KNOBS</span>
+        </div>
+
+        <div class="rack-face">
+          <div class="rack-encoders">
+            <div class="vencoder" id="virusOutKnob"  title="MIDI output device"><div class="vencoder-dial"></div><span>OUT</span></div>
+            <div class="vencoder" id="virusChKnob"   title="MIDI channel (1-16)"><div class="vencoder-dial"></div><span>CH</span></div>
+          </div>
+          <div class="rack-lcd">
+            <div class="rlcd-line" id="rlcd1">CH -- · PGM ---</div>
+            <div class="rlcd-line" id="rlcd2">no output</div>
+          </div>
+
+          <div class="rack-buttons">
+            <button class="rbtn"    id="virusStore"  title="Store current settings">STORE</button>
+            <button class="rbtn"    id="virusEdit"   title="Program-change on pattern press">PC/PTN</button>
+            <button class="rbtn"    id="virusMute"   title="All notes off (panic)">PANIC</button>
+            <button class="rbtn on" id="virusOnBtn"  title="Enable MIDI-out routing">ON</button>
+          </div>
+
+          <div class="rack-knobs rack-knobs-main">
+            <div class="vknob" data-cc="74" data-lbl="CUTOFF"><div class="vknob-dial"></div><span>CUTOFF</span></div>
+            <div class="vknob" data-cc="71" data-lbl="RES"   ><div class="vknob-dial"></div><span>RES</span></div>
+            <div class="vknob" data-cc="73" data-lbl="ATTACK"><div class="vknob-dial"></div><span>ATTACK</span></div>
+            <div class="vknob" data-cc="75" data-lbl="DECAY" ><div class="vknob-dial"></div><span>DECAY</span></div>
+          </div>
+
+          <div class="rack-knobs rack-knobs-soft">
+            <div class="vknob" data-cc="91" data-lbl="REVERB"><div class="vknob-dial"></div><span>REVERB</span></div>
+            <div class="vknob" data-cc="93" data-lbl="CHORUS"><div class="vknob-dial"></div><span>CHORUS</span></div>
+            <div class="vknob" data-cc="7"  data-lbl="VOL"   ><div class="vknob-dial"></div><span>VOL</span></div>
+            <div class="vknob" data-cc="1"  data-lbl="MOD"   ><div class="vknob-dial"></div><span>MOD</span></div>
+          </div>
+        </div>
+
+        <!-- SONG BANK — 16 songs × 8 MIDI-clip pads. -->
+        <div class="virus-songs">
+          <div class="song-header">
+            <span class="section-label">SONG</span>
+            <select class="dropdown song-select" id="songSelect"></select>
+            <input class="song-name" id="songName" placeholder="Song name" />
+            <span class="section-label section-label-spaced">RECALL</span>
+            <select class="dropdown song-select" id="virusPresetSel" title="Load a saved rack preset">
+              <option value="">— recall preset —</option>
+            </select>
+            <button class="pill pill-sm" id="virusPresetDel" title="Delete a saved preset">DEL</button>
+            <span class="section-label section-label-spaced">PADS</span>
+          </div>
+          <div class="song-clips" id="songClips"></div>
+          <em class="hint">Click a pad to fire — sends its Program Change then plays the clip on the pad's own MIDI channel. Drag a .mid file onto a pad to load it. Right-hand toggle arms / mutes each pad.</em>
+        </div>
+      </section>
+    </section>
+
+    <!-- ── Right column: master bus only — FX knobs + VU meter + plugins ─── -->
+    <aside class="col-right">
+      <!-- LCD grids + Pad/Sample cards moved out of the right column
+           (they belong under the pads now). Kept in a hidden container so
+           any JS querying them still resolves — we'll wire a floating
+           overlay for pad detail next pass. -->
+      <div hidden id="detachedLcds">
+        <div class="lcd-grid">
+          <div class="lcd-cell"><span>PLAYER</span><b>11</b></div>
+          <div class="lcd-cell"><span>SCENE</span><b>01</b></div>
+          <div class="lcd-cell"><span>PATTERN</span><b>07</b></div>
+          <div class="lcd-cell"><span>SYNC</span><b class="on">ON</b></div>
+          <div class="lcd-cell"><span>TEMPO</span><b>±6</b></div>
+          <div class="lcd-cell"><span>BPM</span><b class="accent">164.0</b></div>
+        </div>
+        <div class="lcd-sub-grid">
+          <div><span>VOLUME</span><b>70</b></div>
+          <div><span>PITCH</span><b>0.0</b></div>
+          <div><span>VELOCITY</span><b>ON</b></div>
+          <div><span>TIME STRE…</span><b>OFF</b></div>
+          <div><span>LOOP</span><b>OFF</b></div>
+          <div><span>TRIGGER M…</span><b>One-s…</b></div>
+        </div>
+      </div>
+
+      <span class="section-label">MASTER FX</span>
+      <div class="fx-strip">
+        <div class="fx-knobs" id="fxKnobs"></div>
+      </div>
+
+      <!-- Master analog VU meter — vintage cream + red arc, black bezel.
+           Volume knob on the left, gain-reduction meter on the right. -->
+      <section class="vu-panel">
+        <div class="vu-vol">
+          <div class="vu-knob" id="masterVolKnob" title="Master volume — drag / wheel">
+            <div class="vu-knob-dial"></div>
+          </div>
+          <span class="vu-caplbl">VOL</span>
+        </div>
+        <div class="vu-meter" title="Master output VU">
+          <canvas id="vuCanvas" width="220" height="150"></canvas>
+        </div>
+        <div class="vu-gr">
+          <canvas id="grCanvas" width="42" height="150" title="Compression reduction"></canvas>
+          <span class="vu-caplbl">GR</span>
+        </div>
+      </section>
+
+      <!-- PAD 1 + SAMPLE cards were moved down under the motion editor
+           in the center column. -->
+
+      <!-- Master-bus plugin chain (VST3/VST2) -->
+      <section class="pad-card">
+        <header>
+          <b>PLUGINS · MAIN BUS</b>
+          <div class="row-mini">
+            <button class="pill pill-sm" id="btnPluginScan">SCAN</button>
+          </div>
+        </header>
+        <div class="plugin-chain" id="pluginChain">
+          <div class="plugin-empty">Chain is empty — add plugins below to build the master bus.</div>
+        </div>
+        <div class="plugin-add">
+          <select class="dropdown" id="pluginList">
+            <option value="">— pick a plugin to add —</option>
+          </select>
+          <button class="pill pill-blue" id="btnPluginAdd">＋ ADD</button>
+        </div>
+        <em class="hint">Chain is real — plugin order + bypass flags are stored per kit. Actual audio processing + native UI (<code>UI</code> button) needs the Steinberg VST3 SDK in <code>vendor/vst3sdk</code>. This pass gives you the chain scaffolding + discovery.</em>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="statusbar" id="status">Ready — click a pad, or press 1-4 / Q-R / A-F / Z-V</footer>
+
+  <!-- Shim MUST load before kit.js so it can polyfill window.chrome.webview. -->
+  <script src="/tauri-shim.js"></script>
+  <script src="/kit.js?v=35"></script>
+</body>
+</html>

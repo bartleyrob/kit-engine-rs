@@ -1,0 +1,24 @@
+[package]
+name    = "kit-engine-app"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "KitStation Tauri shell — hosts the web UI and bridges to kit-engine."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+kit-engine = { path = "../crates/engine" }
+
+tauri      = { version = "2", features = [] }
+cpal       = { workspace = true }
+midir      = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+log        = { workspace = true }
+env_logger = { workspace = true }
+
+[features]
+# Allow signing / notarizing to be flipped on from CI without touching code.
+custom-protocol = ["tauri/custom-protocol"]

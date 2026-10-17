@@ -1,0 +1,53 @@
+name: macOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Build a universal binary so the same .app runs on Apple-silicon
+          # and Intel macs. Negligible cost — cpal / midir / tauri all
+          # compile for both targets without special-casing.
+          targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./ -> target"
+
+      - name: Test (engine crate)
+        run: cargo test -p kit-engine --release
+
+      - name: Install tauri-cli
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: Build .app (universal)
+        run: npx tauri build --target universal-apple-darwin --bundles app,dmg
+        env:
+          # No code-signing secret for now — the .dmg comes out un-notarised.
+          # Right-click → Open the first time to bypass Gatekeeper, or add
+          # APPLE_CERTIFICATE / APPLE_ID / APPLE_PASSWORD secrets to the repo
+          # and the Tauri bundler will sign + notarise automatically.
+          TAURI_SIGNING_PRIVATE_KEY: ""
+
+      - name: Collect artifacts
+        run: |
+          out=kit-engine-rs-macos-universal
+          mkdir -p "$out"
+          cp -R target/universal-apple-darwin/release/bundle/macos/*.app "$out/"
+          cp    target/universal-apple-darwin/release/bundle/dmg/*.dmg   "$out/" 2>/dev/null || true
+          # tar preserves .app bundle structure (zip corrupts resource forks).
+          tar -czf "$out.tar.gz" "$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kit-engine-rs-macos-universal
+          path: kit-engine-rs-macos-universal.tar.gz

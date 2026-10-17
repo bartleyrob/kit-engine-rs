@@ -1,0 +1,11 @@
+[package]
+name    = "kit-engine"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "KitStation sample player + sequencer core — no OS deps."
+
+[dependencies]
+cpal   = { workspace = true }
+hound  = { workspace = true }
+log    = { workspace = true }
