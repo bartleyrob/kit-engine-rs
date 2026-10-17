@@ -21,6 +21,15 @@
   const T = window.__TAURI__;
   if (!T) { console.warn('[kit-engine] not running under Tauri — shim idle'); return; }
 
+  // kit.js gates every bridge send on `nativeHost`, which is derived from
+  // `window.KitStation.host === 'native'`. The C++ build injected this
+  // marker via WebView2's AddScriptToExecuteOnDocumentCreated. We set it
+  // here before kit.js runs so the entire bridge path lights up.
+  window.KitStation = {
+    host: 'native',
+    send: (obj) => window.chrome.webview.postMessage(obj),
+  };
+
   const invoke = T.core && T.core.invoke
     ? T.core.invoke.bind(T.core)
     : T.invoke.bind(T);
