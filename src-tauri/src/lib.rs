@@ -18,6 +18,30 @@ use tauri::{Emitter, Manager};
 use crate::audio::AudioHost;
 use crate::midi::{MidiHost, MidiInputFn};
 
+// ─── Bring-up logging ────────────────────────────────────────────────────
+// Writes to %LOCALAPPDATA%\KitStation\bridge.log so we can see which
+// commands actually reach the Rust side without needing a visible
+// console. Each command handler calls `trace("…")` at entry.
+use std::io::Write;
+use std::sync::OnceLock;
+fn trace(line: &str) {
+    static LOG: OnceLock<std::sync::Mutex<Option<std::fs::File>>> = OnceLock::new();
+    let m = LOG.get_or_init(|| {
+        let dir = crate::paths::app_data_dir();
+        let _   = std::fs::create_dir_all(&dir);
+        let f   = std::fs::OpenOptions::new()
+            .create(true).write(true).truncate(true)
+            .open(dir.join("bridge.log")).ok();
+        std::sync::Mutex::new(f)
+    });
+    if let Ok(mut g) = m.lock() {
+        if let Some(f) = g.as_mut() {
+            let _ = writeln!(f, "{line}");
+            let _ = f.flush();
+        }
+    }
+}
+
 pub struct AppState {
     pub engine: Arc<Engine>,
     pub audio:  Mutex<AudioHost>,
@@ -27,7 +51,10 @@ pub struct AppState {
 // ─── Bridge messages the UI expects ───────────────────────────────────────
 
 #[derive(Serialize, Clone)]
-#[serde(tag = "type", rename_all = "camelCase")]
+// `rename_all` renames the enum variants (MasterMeters → masterMeters),
+// `rename_all_fields` renames fields WITHIN each variant (peak_l → peakL),
+// which is what the JS UI expects (meter JS reads m.peakL, not m.peak_l).
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 enum BridgeEvent {
     Status      { text: String },
     SampleAssigned { pad: i32, ok: bool, path: String },
@@ -116,9 +143,12 @@ fn get_master_meters(app: tauri::AppHandle, state: tauri::State<AppState>) {
 #[tauri::command]
 fn list_audio_devices(app: tauri::AppHandle, state: tauri::State<AppState>) {
     let host = state.audio.lock().unwrap();
+    let list = host.list();
+    trace(&format!("list_audio_devices → {} devices (current='{}')",
+                   list.len(), host.current_name()));
     emit(&app, BridgeEvent::AudioDevices {
         current: host.current_name(),
-        list:    host.list(),
+        list,
     });
 }
 #[tauri::command]
@@ -291,7 +321,12 @@ fn get_sample_peaks(app: tauri::AppHandle, pad: i32) {
     emit(&app, BridgeEvent::SamplePeaks { pad, peaks: vec![] });
 }
 #[tauri::command]
-fn hello() { /* no-op; the C++ build used this to defer the audio-init status */ }
+fn hello() { trace("hello  (JS bridge is live)"); }
+
+// Catch-all diagnostic hook — the shim can send `{type:'debug', msg:'…'}`
+// and anything stuck in the WebView surfaces in bridge.log.
+#[tauri::command]
+fn debug(msg: String) { trace(&format!("debug: {msg}")); }
 
 // ─── Setup ────────────────────────────────────────────────────────────────
 
@@ -310,6 +345,8 @@ pub fn run() {
             }
         })
         .setup(move |app| {
+            trace("=== KitStation bring-up ===");
+            trace(&format!("app_data_dir = {}", paths::app_data_dir().display()));
             // Open the default audio device straight away so pads play on
             // first boot. If it fails, the status bar announces it; the
             // user can pick a different device from the Audio & MIDI modal.
@@ -317,12 +354,17 @@ pub fn run() {
             let mut audio = state.audio.lock().unwrap();
             match audio.open("", engine.clone()) {
                 Ok(()) => {
+                    trace(&format!("audio opened: {} @ {} Hz, {} ch",
+                                   audio.current_name(), audio.sample_rate(), audio.channels()));
                     emit(&app.handle(), BridgeEvent::Status { text:
                         format!("Audio: {} @ {} Hz, {} ch",
                                 audio.current_name(), audio.sample_rate(), audio.channels()) });
                 }
-                Err(e) => emit(&app.handle(), BridgeEvent::Status {
-                    text: format!("Audio: FAILED to open default device — {e}") }),
+                Err(e) => {
+                    trace(&format!("audio FAILED: {e}"));
+                    emit(&app.handle(), BridgeEvent::Status {
+                        text: format!("Audio: FAILED to open default device — {e}") });
+                }
             }
             Ok(())
         })
@@ -339,7 +381,7 @@ pub fn run() {
             save_kit, load_kit, list_kits,
             virus_save, virus_load,
             virus_preset_save, virus_preset_load, virus_preset_list, virus_preset_delete,
-            list_plugins, get_sample_peaks, hello,
+            list_plugins, get_sample_peaks, hello, debug,
         ])
         .run(tauri::generate_context!())
         .expect("tauri app crashed");

@@ -11,7 +11,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 kit-engine = { path = "../crates/engine" }
 
-tauri      = { version = "2", features = [] }
+tauri      = { version = "2", features = ["devtools"] }
 cpal       = { workspace = true }
 midir      = { workspace = true }
 serde      = { workspace = true }
