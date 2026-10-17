@@ -18,8 +18,24 @@
 // tiny polyfill covers everything.
 
 (function () {
-  const T = window.__TAURI__;
-  if (!T) { console.warn('[kit-engine] not running under Tauri — shim idle'); return; }
+  // Tauri 2 only populates window.__TAURI__ when app.withGlobalTauri is on
+  // in tauri.conf.json (which we set). If this script runs before Tauri
+  // injects it we poll briefly, then install the polyfill as soon as it's
+  // there — otherwise early calls from kit.js hit a dead chrome.webview.
+  function init(T) {
+    if (window.chrome && window.chrome.webview && window.chrome.webview.__kitEngineReady) return;
+    installPolyfill(T);
+  }
+  if (window.__TAURI__) { init(window.__TAURI__); }
+  else {
+    let tries = 0;
+    const t = setInterval(() => {
+      if (window.__TAURI__) { clearInterval(t); init(window.__TAURI__); }
+      else if (++tries > 50) { clearInterval(t); console.warn('[kit-engine] window.__TAURI__ never appeared'); }
+    }, 20);
+  }
+
+  function installPolyfill(T) {
 
   // kit.js gates every bridge send on `nativeHost`, which is derived from
   // `window.KitStation.host === 'native'`. The C++ build injected this
@@ -63,6 +79,7 @@
 
   window.chrome = window.chrome || {};
   window.chrome.webview = {
+    __kitEngineReady: true,
     postMessage(obj) {
       if (!obj || !obj.type) return;
       const { type, ...rest } = obj;
@@ -80,4 +97,5 @@
       while (earlyBuffer.length) dispatch(earlyBuffer.shift());
     },
   };
+  }  // end installPolyfill
 })();
